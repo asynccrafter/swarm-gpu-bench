@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <style>
+    body {
+      margin: 0
+    }
+  </style>
+  <title>Swarm GPU Bench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <style>
+    :root {
+      --ground: #07090e;
+      --panel: rgba(14, 18, 27, .82);
+      --line: rgba(150, 170, 205, .16);
+      --text: #dce3ee;
+      --muted: #7f8aa0;
+      --amber: #ffb454;
+      --ice: #6cc4ff;
+      --good: #5fd39a;
+      --warn: #ffb454;
+      --bad: #ff6b6b;
+      --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color-scheme: dark;
+    }
+
+    [hidden] {
+      display: none !important
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden
+    }
+
+    body {
+      background: var(--ground);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px
+    }
+
+    canvas#gl {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      cursor: grab
+    }
+
+    canvas#gl:active {
+      cursor: grabbing
+    }
+
+    .hud,
+    .ctrl {
+      position: fixed;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px)
+    }
+
+    .hud {
+      top: calc(16px + env(safe-area-inset-top, 0px));
+      left: 16px;
+      padding: 14px 16px;
+      width: 250px;
+      max-width: calc(100% - 32px);
+      display: grid;
+      gap: 10px
+    }
+
+    .brand {
+      font-family: var(--display);
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between
+    }
+
+    .brand b {
+      color: var(--amber)
+    }
+
+    .fps {
+      display: flex;
+      align-items: baseline;
+      gap: 8px
+    }
+
+    .fps .v {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 44px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums
+    }
+
+    .fps .u {
+      color: var(--muted);
+      letter-spacing: .1em
+    }
+
+    .fps .pill {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid currentColor
+    }
+
+    #spark {
+      width: 100%;
+      height: 38px;
+      display: block
+    }
+
+    dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 12px
+    }
+
+    dt {
+      color: var(--muted)
+    }
+
+    dd {
+      margin: 0;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .ctrl {
+      right: 16px;
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      width: 330px;
+      max-width: calc(100% - 32px);
+      padding: 14px 16px;
+      display: grid;
+      gap: 14px
+    }
+
+    .row {
+      display: grid;
+      gap: 6px
+    }
+
+    .lbl {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase
+    }
+
+    .lbl output {
+      color: var(--text);
+      letter-spacing: 0;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums
+    }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--amber)
+    }
+
+    .seg {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      overflow: hidden
+    }
+
+    .seg button {
+      all: unset;
+      cursor: pointer;
+      text-align: center;
+      padding: 6px 0;
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    .seg button+button {
+      border-left: 1px solid var(--line)
+    }
+
+    .seg button[aria-pressed=true] {
+      background: rgba(255, 180, 84, .14);
+      color: var(--amber)
+    }
+
+    .btns {
+      display: flex;
+      gap: 8px
+    }
+
+    .btn {
+      all: unset;
+      cursor: pointer;
+      flex: 1;
+      text-align: center;
+      padding: 9px 0;
+      border-radius: 4px;
+      font-family: var(--display);
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      color: var(--text)
+    }
+
+    .btn.primary {
+      background: var(--amber);
+      color: #1a1206;
+      border-color: var(--amber)
+    }
+
+    .btn:focus-visible,
+    .seg button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--ice);
+      outline-offset: 2px
+    }
+
+    .btn[disabled] {
+      opacity: .45;
+      cursor: not-allowed
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5
+    }
+
+    #bench {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(4, 6, 10, .55);
+      padding: 16px
+    }
+
+    .card {
+      background: #0e121b;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      width: 420px;
+      max-width: 100%;
+      display: grid;
+      gap: 14px;
+      max-height: 90%;
+      overflow: auto
+    }
+
+    .card h2 {
+      margin: 0;
+      font-family: var(--display);
+      font-size: 14px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--muted)
+    }
+
+    .score {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 52px;
+      line-height: 1;
+      color: var(--amber);
+      font-variant-numeric: tabular-nums
+    }
+
+    .score small {
+      display: block;
+      font-family: var(--mono);
+      font-weight: 400;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-variant-numeric: tabular-nums
+    }
+
+    th,
+    td {
+      padding: 5px 4px;
+      text-align: right;
+      border-bottom: 1px solid var(--line)
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .1em
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: left
+    }
+
+    .bar {
+      height: 4px;
+      background: var(--line);
+      border-radius: 2px;
+      overflow: hidden
+    }
+
+    .bar i {
+      display: block;
+      height: 100%;
+      background: var(--amber);
+      width: 0
+    }
+
+    #stageInfo {
+      position: fixed;
+      left: 50%;
+      top: calc(16px + env(safe-area-inset-top, 0px));
+      transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid var(--amber);
+      color: var(--amber);
+      padding: 8px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap
+    }
+
+    #err {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      text-align: center;
+      color: var(--bad)
+    }
+
+    @media (max-width:640px) {
+      .hud {
+        width: auto;
+        right: 16px;
+        grid-template-columns: auto 1fr;
+        align-items: center
+      }
+
+      .hud .brand,
+      .hud dl {
+        grid-column: 1/-1
+      }
+
+      .hud dl {
+        display: none
+      }
+
+      .fps .v {
+        font-size: 34px
+      }
+
+      .ctrl {
+        left: 16px;
+        width: auto
+      }
+
+      #stageInfo {
+        top: auto;
+        bottom: calc(290px + env(safe-area-inset-bottom, 0px))
+      }
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      .bar i {
+        transition: none
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <canvas id="gl"></canvas>
+
+  <section class="hud" aria-label="Messwerte">
+    <div class="brand"><span><b>Swarm</b> GPU Bench</span><span id="ver">WebGL2</span></div>
+    <div class="fps"><span class="v" id="fps">--</span><span class="u">FPS</span><span class="pill" id="pill">–</span>
+    </div>
+    <canvas id="spark" aria-hidden="true"></canvas>
+    <dl>
+      <dt>Frame</dt>
+      <dd id="ms">-- ms</dd>
+      <dt>Objekte</dt>
+      <dd id="objs">--</dd>
+      <dt>Dreiecke</dt>
+      <dd id="tris">--</dd>
+      <dt>Draw Calls</dt>
+      <dd>1 (instanced)</dd>
+      <dt>Auflösung</dt>
+      <dd id="res">--</dd>
+      <dt>GPU</dt>
+      <dd id="gpu" title="">--</dd>
+    </dl>
+  </section>
+
+  <section class="ctrl" aria-label="Steuerung">
+    <div class="row">
+      <label class="lbl" for="count">Objekte <output id="countOut">10.000</output></label>
+      <input type="range" id="count" min="0" max="100" step="1" value="40">
+    </div>
+    <div class="row">
+      <span class="lbl">Geometrie <output id="geoOut">12 Dreiecke</output></span>
+      <div class="seg" id="shape" role="group" aria-label="Geometrie">
+        <button type="button" data-s="cube" aria-pressed="true">Würfel</button>
+        <button type="button" data-s="octa" aria-pressed="false">Oktaeder</button>
+        <button type="button" data-s="ico" aria-pressed="false">Ikosph.</button>
+        <button type="button" data-s="sphere" aria-pressed="false">Kugel</button>
+      </div>
+    </div>
+    <div class="row">
+      <label class="lbl" for="scale">Render-Skalierung <output id="scaleOut">100 %</output></label>
+      <input type="range" id="scale" min="25" max="200" step="25" value="100">
+    </div>
+    <div class="btns">
+      <button type="button" class="btn" id="pause">Pause</button>
+      <button type="button" class="btn primary" id="run">Benchmark</button>
+    </div>
+    <p class="hint" style="margin:0">Ziehen zum Drehen · Mausrad / Pinch zum Zoomen. Alle Objekte laufen in einem
+      einzigen Draw Call; Bewegung wird komplett auf der GPU berechnet.</p>
+  </section>
+
+  <div id="stageInfo" hidden></div>
+
+  <div id="bench" hidden>
+    <div class="card" role="dialog" aria-labelledby="bh">
+      <h2 id="bh">Benchmark-Ergebnis</h2>
+      <div class="score"><span id="score">0</span><small id="scoreSub">Objekte bei ≥ 30 FPS</small></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Objekte</th>
+              <th>Ø FPS</th>
+              <th>1 % Low</th>
+              <th>Dreiecke</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin:0" id="benchNote"></p>
+      <div class="btns"><button type="button" class="btn" id="close">Schließen</button><button type="button"
+          class="btn primary" id="again">Erneut</button></div>
+    </div>
+  </div>
+
+  <div id="err" hidden></div>
+
+  <script>
+    (() => {
+      "use strict";
+      const $ = id => document.getElementById(id);
+      const canvas = $("gl");
+      const gl = canvas.getContext("webgl2", { antialias: true, powerPreference: "high-performance", alpha: false });
+      if (!gl) { $("err").hidden = false; $("err").textContent = "WebGL2 wird von diesem Browser oder dieser GPU nicht unterstützt."; return; }
+
+      /* ---------- GPU-Info ---------- */
+      (() => {
+        let n = gl.getParameter(gl.RENDERER); const e = gl.getExtension("WEBGL_debug_renderer_info");
+        if (e) n = gl.getParameter(e.UNMASKED_RENDERER_WEBGL) || n;
+        n = String(n).replace(/^ANGLE \((.*)\)$/, "$1").replace(/, Direct3D.*$/, "").replace(/ \(0x[0-9A-F]+\)/i, "");
+        $("gpu").textContent = n; $("gpu").title = n;
+      })();
+
+      /* ---------- Shader ---------- */
+      const VS = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNor;
+uniform mat4 uVP; uniform float uTime; uniform float uSize; uniform float uSpread; uniform vec3 uEye;
+out vec3 vNor; out vec3 vCol; out vec3 vView; out float vDist;
+uint hash(uint x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;x^=x>>16;return x;}
+float rnd(uint i,uint k){return float(hash(i*8u+k))*(1.0/4294967295.0);}
+mat3 rot(vec3 a,float g){float s=sin(g),c=cos(g),o=1.0-c;
+ return mat3(o*a.x*a.x+c,o*a.x*a.y+a.z*s,o*a.z*a.x-a.y*s,
+             o*a.x*a.y-a.z*s,o*a.y*a.y+c,o*a.y*a.z+a.x*s,
+             o*a.z*a.x+a.y*s,o*a.y*a.z-a.x*s,o*a.z*a.z+c);}
+void main(){
+ uint id=uint(gl_InstanceID);
+ float r0=rnd(id,0u),r1=rnd(id,1u),r2=rnd(id,2u),r3=rnd(id,3u),r4=rnd(id,4u),r5=rnd(id,5u),r6=rnd(id,6u);
+ float arms=4.0, arm=floor(r1*arms);
+ float t=pow(r0,0.55);
+ float rad=1.2+t*uSpread;
+ float jitter=(r2-0.5)*(0.35+0.9*(1.0-t))+(r5-0.5)*0.25;
+ float ang=arm/arms*6.28318+t*4.2+jitter-uTime*0.35/sqrt(0.15+t);
+ float thick=(r3-0.5)*(0.5+2.6*exp(-t*3.0))*uSpread*0.12;
+ thick+=sin(uTime*0.8+rad*0.25+r4*6.28)*0.6;
+ vec3 c=vec3(cos(ang)*rad,thick,sin(ang)*rad);
+ vec3 ax=normalize(vec3(r4-0.5,r5-0.5,r6-0.5)+1e-3);
+ mat3 R=rot(ax,uTime*(0.6+r0*2.4)+r2*6.28318);
+ float s=uSize*(0.55+0.9*r6)*(1.0+0.6*(1.0-t));
+ vec3 w=c+R*(aPos*s);
+ vNor=R*aNor;
+ vec3 core=vec3(1.0,0.66,0.30), mid=vec3(0.95,0.35,0.45), rim=vec3(0.35,0.72,1.0);
+ vCol=mix(mix(core,mid,smoothstep(0.0,0.45,t)),rim,smoothstep(0.35,0.95,t));
+ vCol*=0.75+0.5*r3;
+ vView=uEye-w; vDist=length(vView);
+ gl_Position=uVP*vec4(w,1.0);
+}`;
+      const FS = `#version 300 es
+precision highp float;
+in vec3 vNor; in vec3 vCol; in vec3 vView; in float vDist;
+uniform float uFog; out vec4 o;
+void main(){
+ vec3 n=normalize(vNor); vec3 v=normalize(vView);
+ if(dot(n,v)<0.0) n=-n;
+ vec3 L=normalize(vec3(0.4,0.9,0.3));
+ float d=max(dot(n,L),0.0);
+ float rim=pow(1.0-max(dot(n,v),0.0),3.0);
+ float spec=pow(max(dot(n,normalize(L+v)),0.0),40.0);
+ vec3 col=vCol*(0.22+0.85*d)+vCol*rim*0.9+vec3(spec*0.5);
+ float f=exp(-vDist*uFog);
+ col=mix(vec3(0.027,0.035,0.055),col,f);
+ o=vec4(pow(col,vec3(1.0/1.15)),1.0);
+}`;
+      function sh(t, s) { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(x); return x; }
+      const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { $("err").hidden = false; $("err").textContent = gl.getProgramInfoLog(prog); return; }
+      const U = {};["uVP", "uTime", "uSize", "uSpread", "uEye", "uFog"].forEach(k => U[k] = gl.getUniformLocation(prog, k));
+
+      /* ---------- Geometrie (flach schattiert) ---------- */
+      function flat(tris) {
+        const a = new Float32Array(tris.length * 18); let o = 0;
+        for (const [p, q, r] of tris) {
+          const e1 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]], e2 = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+          let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...n) || 1; n = n.map(x => x / l);
+          for (const v of [p, q, r]) { a.set(v, o); a.set(n, o + 3); o += 6; }
+        }
+        return a;
+      }
+      function cube() {
+        const T = [], f = [[0, 1, 2], [1, 2, 0], [2, 0, 1]];
+        for (const [i, j, k] of f) for (const s of [-1, 1]) {
+          const P = (u, v) => { const p = [0, 0, 0]; p[i] = s; p[j] = u; p[k] = v; return p; };
+          T.push([P(-1, -1), P(1, -1), P(1, 1)], [P(-1, -1), P(1, 1), P(-1, 1)]);
+        }
+        return T.map(t => t.map(v => v.map(x => x * 0.6)));
+      }
+      function octa() {
+        const V = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], T = [];
+        for (const x of [0, 1]) for (const y of [2, 3]) for (const z of [4, 5]) T.push([V[x], V[y], V[z]]); return T;
+      }
+      function icos(sub) {
+        const t = (1 + Math.sqrt(5)) / 2; let V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
+        const nz = v => { const l = Math.hypot(...v); return v.map(x => x / l); }; V = V.map(nz);
+        let F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]].map(f => f.map(i => V[i]));
+        for (let s = 0; s < sub; s++) { const N = []; for (const [a, b, c] of F) { const m = (p, q) => nz([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2]); const ab = m(a, b), bc = m(b, c), ca = m(c, a); N.push([a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]); } F = N; }
+        return F;
+      }
+      const shapes = { cube: cube(), octa: octa(), ico: icos(1), sphere: icos(2) };
+      const meshes = {};
+      for (const k in shapes) {
+        const data = flat(shapes[k]); const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+        const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+        gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+        meshes[k] = { vao, verts: data.length / 6, tris: data.length / 18 };
+      }
+      gl.bindVertexArray(null);
+
+      /* ---------- Mathe ---------- */
+      function persp(f, a, n, fa) { const t = 1 / Math.tan(f / 2), nf = 1 / (n - fa); return [t / a, 0, 0, 0, 0, t, 0, 0, 0, 0, (fa + n) * nf, -1, 0, 0, 2 * fa * n * nf, 0]; }
+      function look(e, c, u) {
+        let z = [e[0] - c[0], e[1] - c[1], e[2] - c[2]]; let l = Math.hypot(...z); z = z.map(x => x / l);
+        let x = [u[1] * z[2] - u[2] * z[1], u[2] * z[0] - u[0] * z[2], u[0] * z[1] - u[1] * z[0]]; l = Math.hypot(...x); x = x.map(v => v / l);
+        const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+        return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -(x[0] * e[0] + x[1] * e[1] + x[2] * e[2]), -(y[0] * e[0] + y[1] * e[1] + y[2] * e[2]), -(z[0] * e[0] + z[1] * e[1] + z[2] * e[2]), 1];
+      }
+      function mul(a, b) { const o = new Array(16); for (let i = 0; i < 4; i++)for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++)s += a[k * 4 + j] * b[i * 4 + k]; o[i * 4 + j] = s; } return o; }
+
+      /* ---------- Zustand ---------- */
+      const S = { count: 10000, shape: "cube", scale: 1, paused: false, time: 0, yaw: 0.6, pitch: 0.42, zoom: 1, drag: false, autoYaw: true };
+      const nf = new Intl.NumberFormat("de-DE");
+      const fmt = n => nf.format(Math.round(n));
+      // Slider 0..100 -> 1.000 .. 2.000.000 (logarithmisch)
+      const sliderToCount = v => { const c = 1000 * Math.pow(2000, v / 100); const p = Math.pow(10, Math.floor(Math.log10(c)) - 1); return Math.round(c / p) * p; };
+      function setCount(n) { S.count = n; $("countOut").textContent = fmt(n); updateStatic(); }
+      function updateStatic() { const m = meshes[S.shape]; $("objs").textContent = fmt(S.count); $("tris").textContent = fmt(S.count * m.tris); $("geoOut").textContent = m.tris + " Dreiecke"; }
+      $("count").addEventListener("input", e => setCount(sliderToCount(+e.target.value)));
+      $("shape").addEventListener("click", e => {
+        const b = e.target.closest("button"); if (!b) return; S.shape = b.dataset.s;
+        for (const x of $("shape").children) x.setAttribute("aria-pressed", x === b); updateStatic();
+      });
+      $("scale").addEventListener("input", e => { S.scale = e.target.value / 100; $("scaleOut").textContent = e.target.value + " %"; resize(); });
+      $("pause").addEventListener("click", () => { S.paused = !S.paused; $("pause").textContent = S.paused ? "Weiter" : "Pause"; });
+
+      /* ---------- Kamera-Interaktion ---------- */
+      const ptrs = new Map(); let pinch0 = 0, zoom0 = 1;
+      canvas.addEventListener("pointerdown", e => {
+        canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); S.autoYaw = false;
+        if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); zoom0 = S.zoom; }
+      });
+      canvas.addEventListener("pointermove", e => {
+        if (!ptrs.has(e.pointerId)) return; const p = ptrs.get(e.pointerId);
+        if (ptrs.size === 1) { S.yaw -= (e.clientX - p[0]) * 0.005; S.pitch = Math.max(-1.4, Math.min(1.4, S.pitch + (e.clientY - p[1]) * 0.005)); }
+        ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+        if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); S.zoom = Math.max(.25, Math.min(3, zoom0 * pinch0 / d)); }
+      });
+      const up = e => { ptrs.delete(e.pointerId); };
+      canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+      canvas.addEventListener("wheel", e => { e.preventDefault(); S.zoom = Math.max(.25, Math.min(3, S.zoom * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+      canvas.addEventListener("dblclick", () => { S.autoYaw = true; S.zoom = 1; S.pitch = 0.42; });
+
+      /* ---------- Größe ---------- */
+      let W = 1, H = 1;
+      function resize() {
+        const d = (window.devicePixelRatio || 1) * S.scale; W = Math.max(1, Math.round(canvas.clientWidth * d)); H = Math.max(1, Math.round(canvas.clientHeight * d));
+        canvas.width = W; canvas.height = H; $("res").textContent = W + " × " + H;
+      }
+      window.addEventListener("resize", resize); resize();
+
+      /* ---------- Sparkline ---------- */
+      const sp = $("spark"), sx = sp.getContext("2d"); const hist = [];
+      function spark() {
+        const d = window.devicePixelRatio || 1, w = sp.clientWidth, h = sp.clientHeight; if (sp.width !== w * d) { sp.width = w * d; sp.height = h * d; }
+        sx.setTransform(d, 0, 0, d, 0, 0); sx.clearRect(0, 0, w, h); const max = Math.max(60, ...hist) * 1.1;
+        sx.strokeStyle = "rgba(150,170,205,.18)"; sx.setLineDash([2, 3]); for (const g of [30, 60]) { const y = h - g / max * h; sx.beginPath(); sx.moveTo(0, y); sx.lineTo(w, y); sx.stroke(); }
+        sx.setLineDash([]); if (hist.length < 2) return; const step = w / 119;
+        sx.beginPath(); hist.forEach((v, i) => { const x = w - (hist.length - 1 - i) * step, y = h - v / max * h; i ? sx.lineTo(x, y) : sx.moveTo(x, y); });
+        const last = hist[hist.length - 1]; const col = last >= 50 ? "#5fd39a" : last >= 30 ? "#ffb454" : "#ff6b6b";
+        sx.strokeStyle = col; sx.lineWidth = 1.5; sx.stroke(); sx.lineTo(w, h); sx.lineTo(w - (hist.length - 1) * step, h); sx.closePath();
+        sx.fillStyle = col + "22"; sx.fill(); sx.fillStyle = col; sx.beginPath(); sx.arc(w - 1.5, h - last / max * h, 2.5, 0, 7); sx.fill();
+      }
+
+      /* ---------- Render-Loop ---------- */
+      gl.enable(gl.DEPTH_TEST); gl.clearColor(0.027, 0.035, 0.055, 1);
+      let last = performance.now(), acc = 0, frames = 0; const frameTimes = [];
+      let bench = null;
+      function frame(now) {
+        const dt = Math.min(0.1, (now - last) / 1000); last = now;
+        if (!S.paused) S.time += dt;
+        if (S.autoYaw && !S.paused) S.yaw += dt * 0.06;
+        frameTimes.push(dt * 1000); if (frameTimes.length > 240) frameTimes.shift();
+        acc += dt; frames++;
+        if (acc >= 0.5) {
+          const f = frames / acc; hist.push(f); if (hist.length > 120) hist.shift();
+          $("fps").textContent = f < 10 ? f.toFixed(1) : Math.round(f); $("ms").textContent = (1000 / f).toFixed(2) + " ms";
+          const pill = $("pill"); const [t, c] = f >= 50 ? ["flüssig", "var(--good)"] : f >= 30 ? ["spielbar", "var(--warn)"] : ["Limit", "var(--bad)"]; pill.textContent = t; pill.style.color = c;
+          spark(); acc = 0; frames = 0;
+        }
+        if (bench) benchTick(dt);
+
+        const n = S.count, spread = 38 * Math.pow(n / 1000, 0.16), size = 0.55 * Math.pow(1000 / n, 0.2);
+        const dist = spread * 2.1 * S.zoom;
+        const eye = [Math.cos(S.yaw) * Math.cos(S.pitch) * dist, Math.sin(S.pitch) * dist, Math.sin(S.yaw) * Math.cos(S.pitch) * dist];
+        const vp = mul(persp(0.9, W / H, 0.1, dist * 4), look(eye, [0, 0, 0], [0, 1, 0]));
+        gl.viewport(0, 0, W, H); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.useProgram(prog); gl.uniformMatrix4fv(U.uVP, false, vp); gl.uniform1f(U.uTime, S.time); gl.uniform1f(U.uSize, size);
+        gl.uniform1f(U.uSpread, spread); gl.uniform3fv(U.uEye, eye); gl.uniform1f(U.uFog, 0.55 / dist);
+        const m = meshes[S.shape]; gl.bindVertexArray(m.vao); gl.drawArraysInstanced(gl.TRIANGLES, 0, m.verts, n);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      /* ---------- Benchmark ---------- */
+      const STAGES = [1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000, 2000000];
+      const WARM = 1.0, MEAS = 3.0;
+      function startBench() {
+        if (bench) return; $("bench").hidden = true; S.paused = false; $("pause").textContent = "Pause";
+        bench = { i: 0, t: 0, samples: [], results: [], prev: { count: S.count } }; setCount(STAGES[0]);
+        $("run").disabled = true; $("stageInfo").hidden = false; stageLabel();
+      }
+      function stageLabel() { $("stageInfo").textContent = `Stufe ${bench.i + 1}/${STAGES.length} · ${fmt(STAGES[bench.i])} Objekte · ${bench.t < WARM ? "Aufwärmen" : "Messen"}`; }
+      function benchTick(dt) {
+        bench.t += dt; if (bench.t > WARM) bench.samples.push(dt * 1000); stageLabel();
+        if (bench.t < WARM + MEAS) return;
+        const s = bench.samples.slice().sort((a, b) => a - b); const avg = s.reduce((a, b) => a + b, 0) / s.length;
+        const p99 = s[Math.min(s.length - 1, Math.floor(s.length * 0.99))];
+        bench.results.push({ n: STAGES[bench.i], fps: 1000 / avg, low: 1000 / p99 });
+        bench.i++; bench.t = 0; bench.samples = [];
+        if (1000 / avg < 30 || bench.i >= STAGES.length) { finishBench(); return; }
+        setCount(STAGES[bench.i]);
+      }
+      function finishBench() {
+        const R = bench.results; $("stageInfo").hidden = true; $("run").disabled = false;
+        // Score: interpolierte Objektanzahl, bei der 30 FPS erreicht werden
+        let score = 0; for (let i = 0; i < R.length; i++) { if (R[i].fps >= 30) score = R[i].n; else { const a = R[i - 1]; if (a) { const k = (a.fps - 30) / (a.fps - R[i].fps); score = Math.round(a.n + (R[i].n - a.n) * k); } break; } }
+        const tris = meshes[S.shape].tris;
+        $("score").textContent = fmt(score);
+        $("scoreSub").textContent = R[R.length - 1].fps >= 30 && R.length === STAGES.length ? "Objekte bei ≥ 30 FPS – Obergrenze des Tests erreicht" : "Objekte bei ≥ 30 FPS";
+        $("rows").innerHTML = R.map(r => `<tr><td>${fmt(r.n)}</td><td style="color:${r.fps >= 50 ? "var(--good)" : r.fps >= 30 ? "var(--warn)" : "var(--bad)"}">${r.fps.toFixed(1)}</td><td>${r.low.toFixed(1)}</td><td>${fmt(r.n * tris)}</td></tr>`).join("");
+        $("benchNote").textContent = `Geometrie: ${$("shape").querySelector("[aria-pressed=true]").textContent} (${tris} Dreiecke) · ${W}×${H} px · ${$("gpu").textContent}. Hinweis: Mit V-Sync ist die FPS auf die Bildwiederholrate begrenzt.`;
+        setCount(bench.prev.count); bench = null; $("bench").hidden = false; $("close").focus();
+      }
+      $("run").addEventListener("click", startBench); $("again").addEventListener("click", startBench);
+      $("close").addEventListener("click", () => { $("bench").hidden = true; });
+      document.addEventListener("keydown", e => { if (e.key === "Escape") $("bench").hidden = true; });
+
+      setCount(sliderToCount(+$("count").value));
+    })();
+  </script>
+</body>
+
+</html>
